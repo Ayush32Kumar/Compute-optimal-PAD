@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.so
+get-pip.py
+
+# Virtual environments
+pad_env/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+ 
+.virtual_documents/
+ 
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Large/model artifacts
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.safetensors
