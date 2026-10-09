@@ -1,0 +1,50 @@
+{
+  "dataset": "psoups",
+  "config": "psoups_baseline_compare.config (rm_weight=0.8 vs rm_weight=0.0)",
+  "max_new_token": 128,
+  "performance": {
+    "pad": {
+      "n": 50,
+      "avg_elapsed_s": 192.933,
+      "avg_tokens_per_sec": 0.6634,
+      "avg_peak_gpu_mem_mb_combined": 11238.3,
+      "max_peak_gpu_mem_mb_combined": 11334.8,
+      "note": "peak_mem is LLM+RM combined on a single GPU -- RM did not move to its own device due to a hardcoded self.rm_dev in PAD_4bit.py (same bug class as the one fixed in PAD_8bit.py)."
+    },
+    "baseline": {
+      "n": 50,
+      "avg_elapsed_s": 35.493,
+      "avg_tokens_per_sec": 3.6063,
+      "avg_peak_gpu_mem_mb_combined": 11078.5,
+      "max_peak_gpu_mem_mb_combined": 11124.7,
+      "note": "peak_mem is LLM+RM combined on a single GPU -- RM did not move to its own device due to a hardcoded self.rm_dev in PAD_4bit.py (same bug class as the one fixed in PAD_8bit.py)."
+    }
+  },
+  "reward_scores_and_win_rate": {
+    "helpful": {
+      "status": "ok",
+      "n": 50,
+      "pad_win_rate": 0.54,
+      "pad_mean": 0.7382,
+      "baseline_mean": 0.6402
+    },
+    "harmless": {
+      "status": "ok",
+      "n": 50,
+      "pad_win_rate": 0.48,
+      "pad_mean": 0.9249,
+      "baseline_mean": 0.966
+    },
+    "humor": {
+      "status": "ok",
+      "n": 50,
+      "pad_win_rate": 0.82,
+      "pad_mean": 0.7036,
+      "baseline_mean": -1.0694
+    }
+  },
+  "known_issues": [
+    "Win-rate is RM-score-based (PAD score > baseline score per prompt), not GPT-4 judged -- GPT-4 judging was not set up.",
+    "Both LLM and PAD reward model are 4-bit quantized; the paper's setup is unquantized, which may contribute to the helpful-dimension direction mismatch noted separately."
+  ]
+}
