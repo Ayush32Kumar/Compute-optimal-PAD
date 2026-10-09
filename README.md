@@ -74,6 +74,7 @@ python ../collect_model_outs_4bit.py \
 ## 5. To run the evaluations
 
 #helpfulness
+
 python measure_reward.py \
     --out_file="<your_results>.jsonl" \
     --tokenizer="Ray2333/gpt2-large-helpful-reward_model" \
@@ -81,6 +82,7 @@ python measure_reward.py \
     --rm_gpu="cuda:0"
 
 #harmless
+
 python measure_reward.py \
     --out_file="<your_results>.jsonl" \
     --tokenizer="Ray2333/gpt2-large-harmless-reward_model" \
@@ -88,15 +90,14 @@ python measure_reward.py \
     --rm_gpu="cuda:0"
 
 #humor
+
 python measure_reward.py \
   --out_file="<your_results>.jsonl" \
   --tokenizer="mohameddhiab/humor-no-humor" \
   --rm="mohameddhiab/humor-no-humor" \
   --rm_gpu="cuda:0"
 
-* Use Python 3.10 and the project environment to avoid dependency conflicts.
+* Using Python 3.10 and the project environment to avoid dependency conflicts.
 * The custom 4-bit implementation reduces GPU memory usage.
 * Keep `rm_weight=0.8`, `topk=10`, greedy decoding, and `max_new_token=128` for the baseline configuration.
 * Ensure the required model checkpoints are accessible and sufficient GPU memory is available.
-* The current collector uses JSON output, even when the filename has a `.jsonl` extension.
-* The exact GPU placement depends on the model-loading implementation and should be verified from the logs.
