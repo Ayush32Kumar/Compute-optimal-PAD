@@ -73,6 +73,7 @@ python ../collect_model_outs_4bit.py \
 ```
 ## 5. To run the evaluations
 
+```bash
 #helpfulness
 
 python measure_reward.py \
@@ -96,6 +97,7 @@ python measure_reward.py \
   --tokenizer="mohameddhiab/humor-no-humor" \
   --rm="mohameddhiab/humor-no-humor" \
   --rm_gpu="cuda:0"
+```
 
 * Using Python 3.10 and the project environment to avoid dependency conflicts.
 * The custom 4-bit implementation reduces GPU memory usage.
