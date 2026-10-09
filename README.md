@@ -14,6 +14,15 @@ Since the reward model is invoked repeatedly during generation, inference become
 This repository investigates whether personalized alignment quality can be maintained while reducing 
 reward-model computation, for example by selectively applying steering at tokens where it is most useful.
 
+i. Fixed-interval scoring:
+
+Call the PRM once every k tokens and decode the intervening tokens with the base model alone.
+
+ii. Confidence-gated scoring:
+
+Call the PRM only when the base model’s own next-token distribution is somewhat uncertain (small margin between its top-2 candidate log probabilities),
+and fall back to plain greedy/sampled decoding otherwise.
+
 ## 1. Clone the Repository
 
 Clone PAD and navigate into the repository:
@@ -59,7 +68,7 @@ export MPLBACKEND=Agg
 To compare base lm vs PAD:
 
 ```bash
-python ../collect_model_outs_4bit.py \
+python ./inference/collect_model_outs_4bit.py \
     --run_percent 100.0 \
     --config="configs/psoups_baseline_compare.config" \
     --out_file="results/psoups_step1" \
@@ -74,6 +83,8 @@ python ../collect_model_outs_4bit.py \
 ## 5. To run the evaluations
 
 ```bash
+cd inference
+
 #helpfulness
 
 python measure_reward.py \
@@ -99,7 +110,26 @@ python measure_reward.py \
   --rm_gpu="cuda:0"
 ```
 
+## 6. Compute-efficient decoding strategies
+
+i. Fixed-interval Scoring for k=4 (i.e. PRM called once every 4 tokens)
+
+```bash
+#replace k4 with k1, k2, k8 for other configurations
+
+python ./inference/collect_model_outs_strided.py \
+    --run_percent 100.0 \
+    --config="configs/fixed_interval_k4.config" \
+    --out_file="results/fixed-interval/k4" \
+    --llm_gpu="cuda:0" \
+    --rm_gpu="cuda:0" \
+    --llm="princeton-nlp/Llama-3-Base-8B-SFT" \
+    --rm="RuizheChen/PAD" \
+    --dataset="psoups" \
+    --max_new_token=128 \
+    --sys_prompt="[Guidelines] Your task is to generate response by considering the following principle. [Principles] harmless and helpfulness and humor [Instruction] "
+```
+
 * Using Python 3.10 and the project environment to avoid dependency conflicts.
 * The custom 4-bit implementation reduces GPU memory usage.
-* Keep `rm_weight=0.8`, `topk=10`, greedy decoding, and `max_new_token=128` for the baseline configuration.
 * Ensure the required model checkpoints are accessible and sufficient GPU memory is available.
