@@ -20,7 +20,7 @@ Call the PRM once every k tokens and decode the intervening tokens with the base
 
 ii. Confidence-gated scoring:
 
-Call the PRM only when the base model’s own next-token distribution is somewhat uncertain (small margin between its top-2 candidate log probabilities),
+Call the PRM only when the base model is somewhat uncertain (small margin between logits of its top-2 candidate next tokens),
 and fall back to plain greedy/sampled decoding otherwise.
 
 ## 1. Clone the Repository
