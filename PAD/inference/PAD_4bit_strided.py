@@ -14,7 +14,7 @@ finetuning_args = FinetuningArguments
 import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification, LlamaForCausalLM, LlamaForSequenceClassification
 from transformers import BitsAndBytesConfig
-
+#### auto size stuff
 import numpy as np
 def factors(x):
     return [i for i in range(1,x+1) if x%i==0]
@@ -48,11 +48,20 @@ class ARGS:
         self.llm_dev = llm_dev
         self.llm_path = llm_path
         self.rm_path = rm_path
+        # NOTE: kept identical to the working PAD_4bit.py -- this hardcodes RM
+        # onto cuda:0 regardless of rm_dev. Not touching it: this is the known,
+        # proven-working single-GPU setup from Step 1. Fixing this is a
+        # separate, already-attempted, currently-parked problem.
         self.rm_dev = torch.device("cuda:0")
         self.model_args = ModelArguments
         self.model_args.model_name_or_path = rm_path
         self.model_args.quantization_bit = 4
         self.model_args.device_map = {"": self.rm_dev}
+        self.model_args.max_memory = {
+            0: "14GiB",
+            1: "1GiB",
+            "cpu": "30GiB"
+        }
 
         print(f"Loading RM in 4-bit on {self.rm_dev}...")
 
@@ -84,14 +93,22 @@ class ARGS:
         self.LLM = AutoModelForCausalLM.from_pretrained(
             llm_path,
             quantization_config=bnb_config,
-            device_map={"": self.llm_dev}
+            device_map={"": self.llm_dev},
+            max_memory={
+                0: "14GiB",
+                1: "1GiB",
+                "cpu": "30GiB"
+            }
         )
         self.LLM.eval()
 
-        # Compute-optimal sweep instrumentation: how many times was the RM actually invoked during the most recent generate() call.
+        # Compute-optimal sweep instrumentation: how many times did we
+        # actually invoke the RM during the most recent generate() call.
         self.last_call_rm_calls = 0
         self.last_call_total_steps = 0
         self.last_call_margins = []
+        self.last_call_flips = []
+        self.last_call_scored_steps = []
 
     def get_input_ids(self, prompt: str) -> torch.Tensor:
         messages = [
@@ -257,15 +274,25 @@ class ARGS:
         return flat_trme[top_k_ids], rm_cached
     
     def generate(self, prompt, weight=0., topk=1, max_new_token=128, method="greedy", temperature=0.7, chunk_size=5, debug=False,
-                 scoring_strategy="always", stride=1, conf_threshold=None, record_margins=False):
+                 scoring_strategy="always", stride=1, conf_threshold=None, record_margins=False, record_flips=False):
         """
         scoring_strategy:
-          "always"      - call the RM every step (identical to original PAD_4bit.py)
-          "stride"      - call the RM only every `stride` steps
-          "confidence"  - call the RM only when the base LM's own top-2 logit
-                            margin is below conf_threshold
-        On skipped steps, effective_weight=0 is passed to generate_step, which reuses its own existing weight==0 branch
-        (pure greedy on LM logits, no RM call at all).
+          "always"      -- call the RM every step (identical to original PAD_4bit.py)
+          "stride"      -- call the RM only every `stride` steps (step 0 always scored)
+          "confidence"  -- call the RM only when the base LM's own top-2 logit
+                            margin is below conf_threshold (i.e. the LM is unsure)
+        On skipped steps, effective_weight=0 is passed to generate_step, which
+        reuses its own existing weight==0 branch (pure greedy on LM logits,
+        no RM call at all) -- not new logic, just toggling an existing path.
+
+        Bookkeeping (read after the call returns):
+          self.last_call_rm_calls      -- number of steps where the RM was called
+          self.last_call_scored_steps  -- the step indices (0-based) that were scored
+          self.last_call_margins       -- per-step top-2 logit margin (only filled if record_margins=True)
+          self.last_call_flips         -- per-step: None if the step was not scored, else True/False
+                                          = "RM changed the chosen token away from the base model's
+                                          top-1" (only if record_flips=True; meaningful for
+                                          method="greedy" only)
         """
         tokens = self.get_input_ids(prompt)
         initial_len = tokens.shape[-1]
@@ -287,6 +314,8 @@ class ARGS:
         self.last_call_rm_calls = 0
         self.last_call_total_steps = 0
         self.last_call_margins = []
+        self.last_call_flips = []
+        self.last_call_scored_steps = []
         
         iterator_obj = range(max_new_token)
         if debug: iterator_obj = tqdm(iterator_obj)
@@ -302,9 +331,12 @@ class ARGS:
 
                 self.last_call_total_steps += 1
 
-                if record_margins:
+                margin = None
+                if record_margins or scoring_strategy == "confidence":
                     _t2, _ = torch.topk(mout.logits[:, -1], dim=-1, k=2)
-                    self.last_call_margins.append((_t2[:, 0] - _t2[:, 1]).item())
+                    margin = (_t2[:, 0] - _t2[:, 1]).item()
+                    if record_margins:
+                        self.last_call_margins.append(margin)
 
                 # ---- decide whether to score this step ----
                 if weight == 0 or scoring_strategy == "always":
@@ -316,9 +348,6 @@ class ARGS:
                 elif scoring_strategy == "confidence":
                     if conf_threshold is None:
                         raise ValueError("conf_threshold must be set when scoring_strategy='confidence'")
-                    out_logits_peek = mout.logits[:, -1]
-                    top2_vals, _ = torch.topk(out_logits_peek, dim=-1, k=2)
-                    margin = (top2_vals[:, 0] - top2_vals[:, 1]).item()
                     should_score = (margin < conf_threshold)
                     effective_weight = weight if should_score else 0.0
                 else:
@@ -326,12 +355,19 @@ class ARGS:
 
                 if should_score:
                     self.last_call_rm_calls += 1
+                    self.last_call_scored_steps.append(step_idx)
+
+                if record_flips:
+                    base_tok = torch.argmax(mout.logits[:, -1], dim=-1).item()
 
                 if method == "greedy_large":
                     if debug: print("large")
                     tokens, rm_cached = self.generate_greedy_step_large(mout, tokens, topk, effective_weight, rm_cached, chunk_size, debug)   
                 else:
                     tokens, rm_cached = self.generate_step(mout, tokens, topk, effective_weight, method, temperature, rm_cached, debug)
+
+                if record_flips:
+                    self.last_call_flips.append((tokens[0, -1].item() != base_tok) if should_score else None)
                 del mout
 
         return tokens
