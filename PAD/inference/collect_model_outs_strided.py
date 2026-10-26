@@ -155,7 +155,7 @@ for config_num, run_config in enumerate(run_configs):
         elapsed = time.time() -start
         peak_mem_mb = torch.cuda.max_memory_allocated(0) / (1024**2)
 
-        data.append({"prompt": current_prompt, "result": res, "response": current_prompt + res, "elapsed":elapsed, "rm_calls": search.last_call_rm_calls, "total_steps": search.last_call_total_steps, "peak_mem_mb": peak_mem_mb, "method": args.out_file + f"_{config_num}"})
+        data.append({"prompt": current_prompt, "result": res, "response": current_prompt + res, "elapsed":elapsed, "rm_calls": search.last_call_rm_calls, "scored_steps": list(search.last_call_scored_steps), "total_steps": search.last_call_total_steps, "peak_mem_mb": peak_mem_mb, "method": args.out_file + f"_{config_num}"})
         # print(f"[DEBUG]: {elapsed=} {len(current_prompt)=} {current_prompt=}, {res=}")
         with open(Path(args.out_file + f"_{config_num}.jsonl"), "w") as outfile:
             json.dump(data, outfile, ensure_ascii=False)
