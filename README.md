@@ -2,20 +2,18 @@
 
 ## Overview
 
-This repository provides an experimental framework for reproducing **Personalized Alignment at Decoding-time (PAD)** and investigating compute-optimal strategies for test-time personalized text generation.
+This repository provides an experimental framework for reproducing **Personalized Alignment at Decoding-time (PAD)** and investigating compute-optimal strategies for test-time personalized text generation. 
 
-It builds upon the official PAD implementation ([Chen et al., ICLR 2025](https://arxiv.org/abs/2408.03314)), which steers a base language model's generation using a personalized reward model (PRM) at inference time.
+It builds upon the official PAD implementation ([Chen et al., ICLR 2025](https://arxiv.org/abs/2408.03314)), which steers a base language model's generation using a personalized reward model (PRM) at decoding time without modifying the base model's weights. While decoding-time steering eliminates the need to train a separate policy per user preference profile, standard PAD evaluates the 8B-parameter PRM at **every single generated token**. This roughly doubles memory consumption and slows down generation by over 5 times.
 
-As identified in the original paper's limitations, not all tokens require personalized steering. Some tokens (for example, high-confidence tokens) are generated identically regardless of user preferences, so spending the same reward-model compute on every token is often wasteful.
+As identified in the original paper's limitations, not all tokens require personalized steering. Some tokens (for example, high-confidence tokens) are generated identically regardless of user preference. 
 
-This repository investigates whether personalized alignment quality can be maintained while reducing reward-model computation, for example by selectively applying steering at tokens where it is most useful.
-
-We compare two compute-efficient decoding strategies:
+This repository investigates whether personalized alignment quality can be maintained while reducing reward-model computation, for example by selectively applying steering at tokens where it is most useful. This project explores two compute-optimal decoding strategies:
 
 1. **Fixed-interval scoring:** Invoking the PRM once every $k$ tokens ($k \in \{1, 2, 4, 8\}$) and decoding the intervening tokens with the base model alone.
 2. **Confidence-gated scoring:** Invoking the PRM only when the base model's next-token distribution is uncertain (measured by a small margin between the logits of the top-2 candidate tokens), otherwise continuing with the base model.
 
-Both methods operate as modifications to PAD's decoding loop without retraining either the base LLM or the PRM. Both models are loaded in 4-bit precision via `bitsandbytes`, enabling execution within a single GPU setup.
+Both methods operate as modifications to PAD's decoding loop without retraining either the base LLM or the PRM. Both models are loaded in 4-bit precision via `bitsandbytes`, enabling execution within a single 16 GB GPU (such as a Kaggle/Colab T4).
 
 ---
 
@@ -101,7 +99,7 @@ python ./inference/collect_model_outs_4bit.py \
 
 ### Step 2: Compute-Efficient Decoding Strategies
 
-#### Strategy A: Fixed-Interval Scoring (k in {1, 2, 4, 8})
+#### Strategy A: Fixed-Interval Scoring ($k \in \{1, 2, 4, 8\}$)
 Evaluate scoring every $k$-th token (e.g., $k=4$, which invokes the PRM once every 4 tokens):
 
 ```bash
@@ -145,7 +143,7 @@ python ./inference/collect_model_outs_strided.py \
 
 ## 4. Evaluation & Reward Measurement
 
-To score generated responses across Helpfulness, Harmlessness, and Humor, pass the `.jsonl` output file directly to `measure_reward.py`. Reward values are saved as `.npy` arrays inside `results/<subfolder>/`.
+To score generated responses across Helpfulness, Harmlessness, and Humor, pass the `.jsonl` output file directly to `measure_reward.py`. Reward values are saved as `.npy` arrays inside `results/<subfolder>/scores/`.
 
 ```bash
 TARGET_FILE="results/fixed-interval/k4_0.jsonl"
@@ -176,7 +174,7 @@ python ./inference/measure_reward.py \
 
 ## 5. Experimental Results
 
-Experiments were evaluated on the 3-dimensional **P-Soups** benchmark ($n=50$, max 128 new tokens, greedy decoding, rm_weight=0.8 using 4-bit quantization with both models co-located on a single GPU).
+Experiments were evaluated on the 3-dimensional **P-Soups** benchmark ($n=50$, max 128 new tokens, greedy decoding, $\text{rm\_weight}=0.8$) using 4-bit quantization with both models co-located on a single GPU (`cuda:0`).
 
 ### Main Performance & Efficiency Comparison
 
@@ -195,7 +193,7 @@ Experiments were evaluated on the 3-dimensional **P-Soups** benchmark ($n=50$, m
 
 1. **Inference Bottleneck:** Full PAD ($k=1$) slows inference by **5.4 times** compared to the unaligned base model (0.67 tok/s vs 3.61 tok/s, 191.2s vs 35.5s per response).
 2. **Confidence-Gating Outperforms Uniform Striding at Matched Compute:**
-   * At an identical 32-call budget (25% compute), **Confidence-Gated (`p25`) vastly outperforms Fixed-Interval ($k=4$) on Humor** ($-0.254$ vs $-0.930$, $p = 0.007$, achieving an **82% vs 62% win-rate**).
+   * At an identical 32-call budget (25% compute), **Confidence-Gated (`p25`) vastly outperforms Fixed-Interval ($k=4$) on Humor** ($-0.254$ vs $-0.930$, $p = 0.007$, achieving an **82% vs 62% win-rate** against the base model).
    * At a 64-call budget, Confidence-Gated (`p50`) yields $+0.252$ humor vs $-0.532$ for $k=2$ ($p = 0.033$).
 3. **Adaptive Temporal Allocation:** Confidence gating naturally front-loads compute to early decision steps where steering establishes context:
    * **Steps 0–7:** Gated `p25` allocates **35%** of its steering calls (and `p50` allocates **67%**), whereas uniform striding allocates a fixed 25% and 50% regardless of token difficulty.
