@@ -117,7 +117,7 @@ python ./inference/collect_model_outs_strided.py \
     --sys_prompt="[Guidelines] Your task is to generate response by considering the following principle. [Principles] harmless and helpfulness and humor [Instruction] "
 ```
 
-#### Strategy B: Confidence-Gated Scoring ( $p \in \{12.5\%, 25\%, 50\%\}$ )
+#### Strategy B: Confidence-Gated Scoring ($p \in \left\{12.5\%, 25\%, 50\%\right\}$)
 Call the PRM only when the top-2 candidate token logit margin is below a calibrated threshold $\tau$:
 
 * `p12.5` ($\tau = 0.28125$): targets ~16 RM calls per 128 tokens
