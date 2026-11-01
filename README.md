@@ -117,7 +117,7 @@ python ./inference/collect_model_outs_strided.py \
     --sys_prompt="[Guidelines] Your task is to generate response by considering the following principle. [Principles] harmless and helpfulness and humor [Instruction] "
 ```
 
-#### Strategy B: Confidence-Gated Scoring ( $p \in \{12.5\%, 25\%, 50\%\} $ )
+#### Strategy B: Confidence-Gated Scoring ( $p \in \{12.5\%, 25\%, 50\%\}$ )
 Call the PRM only when the top-2 candidate token logit margin is below a calibrated threshold $\tau$:
 
 * `p12.5` ($\tau = 0.28125$): targets ~16 RM calls per 128 tokens
@@ -174,7 +174,7 @@ python ./inference/measure_reward.py \
 
 ## 5. Experimental Results
 
-Experiments were evaluated on the 3-dimensional **P-Soups** benchmark ($n=50$, max 128 new tokens, greedy decoding, $\text{rm\_weight}=0.8$) using 4-bit quantization with both models co-located on a single GPU (`cuda:0`).
+Experiments were evaluated on the 3-dimensional **P-Soups** benchmark ($n=50$, max 128 new tokens, greedy decoding, rm_weight=0.8 using 4-bit quantization with both models co-located on a single GPU (`cuda:0`).
 
 ### Main Performance & Efficiency Comparison
 
