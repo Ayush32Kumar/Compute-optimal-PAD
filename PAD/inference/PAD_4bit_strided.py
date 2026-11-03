@@ -10,7 +10,6 @@ data_args = DataArguments
 training_args = Seq2SeqTrainingArguments
 finetuning_args = FinetuningArguments
 
-# import the huggingface transformers libraries
 import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification, LlamaForCausalLM, LlamaForSequenceClassification
 from transformers import BitsAndBytesConfig
@@ -48,10 +47,6 @@ class ARGS:
         self.llm_dev = llm_dev
         self.llm_path = llm_path
         self.rm_path = rm_path
-        # NOTE: kept identical to the working PAD_4bit.py -- this hardcodes RM
-        # onto cuda:0 regardless of rm_dev. Not touching it: this is the known,
-        # proven-working single-GPU setup from Step 1. Fixing this is a
-        # separate, already-attempted, currently-parked problem.
         self.rm_dev = torch.device("cuda:0")
         self.model_args = ModelArguments
         self.model_args.model_name_or_path = rm_path
@@ -285,7 +280,6 @@ class ARGS:
         reuses its own existing weight==0 branch (pure greedy on LM logits,
         no RM call at all) -- not new logic, just toggling an existing path.
 
-        Bookkeeping (read after the call returns):
           self.last_call_rm_calls      -- number of steps where the RM was called
           self.last_call_scored_steps  -- the step indices (0-based) that were scored
           self.last_call_margins       -- per-step top-2 logit margin (only filled if record_margins=True)
